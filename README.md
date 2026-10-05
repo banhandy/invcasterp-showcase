@@ -25,6 +25,9 @@ shipped, certified part and the general ledger behind it.
 |---|---|
 | Backend feature modules | **103** |
 | REST endpoints | **~980** (OpenAPI spec generated from source) |
+| Reports and dashboards | **37** report pages · **8** dashboards |
+| Printable documents | **28** PDF templates (orders, invoices, certificates, travelers, labels) |
+| Background jobs | **8** scheduled jobs and alerts |
 | Database | **224 tables · 647 foreign keys · 271 CHECK constraints** (SQL Server) |
 | Schema migrations | **360+**, versioned and replayable |
 | Automated tests | **384** Jest test files · **139** Playwright end-to-end specs |
@@ -66,6 +69,103 @@ flowchart LR
 
 Each stage records quantities, scrap and inspection results against the work order. The melt heat follows the part all the way
 to the certificate the customer receives.
+
+### How an order flows through the business
+
+```mermaid
+flowchart LR
+    INQ[Inquiry] --> QUO[Quotation] --> SO[Sales order<br/>AS9100 order review] --> MRP[MRP]
+    MRP --> WO[Work order]
+    MRP --> PR[Purchase request]
+    PR --> PO[RFQ and<br/>purchase order] --> GR[Goods receipt<br/>incoming inspection]
+    GR --> WO
+    GR --> SI[Supplier invoice<br/>3-way match] --> SP[Supplier payment]
+    WO --> FS[Foundry stages<br/>and machining] --> QC[Final inspection]
+    QC --> DN[Delivery<br/>packing list, mill cert] --> ARI[AR invoice<br/>PPN, e-Faktur] --> CP[Customer payment]
+    QC -.->|reject| NCR[NCR, MRB, CAPA]
+    GR -.->|reject| NCR
+```
+
+The sales order drives MRP, which raises both the work orders and the purchase requests for the material they need. Rejected
+material at any inspection opens an NCR, goes to the MRB for disposition, and can raise a CAPA.
+
+### How cost flows into the ledger
+
+```mermaid
+flowchart LR
+    GR[Goods receipt] --> RM[(Raw material<br/>inventory)]
+    RM -->|material issue| WIP[(Work in<br/>progress)]
+    LO[Labour and overhead<br/>at standard rates] -->|absorbed| WIP
+    SC[Subcontract fees] --> WIP
+    WIP -->|production receipt| FG[(Finished<br/>goods)]
+    WIP -->|revert and scrap recovery| RM
+    FG -->|delivery| DEF[(Deferred COGS)]
+    DEF -->|AR invoice| COGS[COGS, matched<br/>with revenue]
+```
+
+Every arrow is a journal entry posted by the operational document itself. A goods receipt credits a GR/IR clearing account that
+the supplier invoice later clears against AP. A delivery is valued at what the stock ledger actually relieved, not at the item
+master's cost, and that value waits in deferred COGS until the invoice recognises revenue and COGS together.
+
+<details>
+<summary><b>Full feature list</b></summary>
+
+**Sales & CRM**
+- Inquiry pipeline with follow-up tracking, quotations, and sales orders with AS9100 order review and customer requirements
+- Delivery notes with packing (packages, packing list, commercial invoice), mill certificate and certificate of conformance
+- AR invoices with PPN, down-payment invoices and advance application, credit memos, customer payments, RMA
+- Customer activities (calls, visits, meetings), CRM dashboard, customer complaints, account-health scoring
+- New-product introduction stage gates through PPAP; multi-currency price lists and pricing rules
+
+**Procurement**
+- Purchase requests (manual or from MRP), RFQ, purchase orders, goods receipts with incoming inspection
+- Supplier invoices with configurable 3-way-match tolerance and variance approval; supplier payments and advances
+- Landed-cost shipments and allocation, GR/IR clearing, purchase returns, supplier debit memos
+- Supplier certifications, evaluations and scorecard; item–supplier prices and lead times
+
+**Foundry & manufacturing**
+- Wax injection, cluster assembly, shell building (per coat), dewax, melt with heat chemistry, pour, knockout and cut-off, heat
+  treatment, machining
+- Product data management (BOMs and routings), work centers, machines with runs, cycles and batches, work orders, rework orders
+- Shop-floor operation queue with QR scanning, confirmation and downtime logging; shop travelers and cluster route cards
+- MRP that generates work orders and purchase requests; capacity load
+- Subcontracting and outside processing, with approval to switch an operation to a vendor or back in-house
+- Maintenance (breakdown and preventive); tooling and dies with ownership, custody and capitalization; tool crib
+- Standard costs, mass cost rollup, overhead and indirect-consumable rates, service-department cost allocation
+- Product genealogy, and a document navigator that draws how any document connects to the rest
+
+**Quality**
+- Inspection plans with characteristics measured at each shop-floor stage; AQL sampling levels
+- Incoming, in-process and final inspection with multi-defect disposition; MRB; NCR; CAPA
+- NDT records, calibration records and alerts, operator certifications that gate work centers
+- Quality certificates, cost of quality, scrap Pareto, supplier scorecard
+
+**Inventory**
+- Warehouses and bin locations, stock movements, stock counts, lot and heat tracking, shelf-life expiry, QR labels for items
+  and locations
+
+**Finance**
+- Chart of accounts, posting profiles routed by business group, journal approvals, posting queue, void center
+- Fiscal periods with period and year-end close, opening balances, FX revaluation, budgets, cost centers
+- Bank accounts, bank statement import and reconciliation, petty cash, cash-flow forecast
+- Fixed assets, withholding tax, e-Faktur export, PPN reconciliation
+
+**Reports (37)**
+- Financial: trial balance, profit and loss, balance sheet, GL activity, GL integrity, subledger reconciliation, AR and AP aging
+  and outstanding, customer and supplier ledgers, PPN reconciliation, GR/IR reconciliation
+- Cost and production: COGM, COGS, cost variance, variance analysis, floor variance, WIP quantity, material issue, rework
+  movement, casting yield, revert recovery, scrap Pareto, cost of quality
+- Operations: OEE, downtime, capacity load, sales summary, outstanding orders and delivery detail, purchase summary and
+  tracking, item price history, fixed-asset mutation and disposal
+
+**Platform**
+- Multiple companies, users, roles and permissions, configurable approval rules, KPI targets
+- Field-level audit trail, attachments, notifications, real-time updates across users
+- 28 printable PDF documents; document email with correspondence history; inbound mailbox polling; scheduled reports
+- A public QR verification page for printed documents
+- An AI assistant with read-only database tools, where every question and every query it runs is logged
+
+</details>
 
 ---
 
@@ -144,9 +244,10 @@ A system with this many interacting rules breaks in ways ordinary tests miss, so
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18, Vite, React Router, TanStack React Query, React Hook Form, Zod, Tailwind CSS, Recharts / ApexCharts, React Flow |
-| Backend | Node.js, Express, `mssql`, express-validator, JWT, Socket.IO, Winston, node-cron, Helmet, rate limiting |
-| Documents | Puppeteer and PDFKit (PDF), QR codes, Nodemailer + ImapFlow (email) |
+| Frontend | React 18, Vite, React Router, TanStack React Query, React Hook Form, Zod, Tailwind CSS, Recharts / ApexCharts, React Flow (document graph), html5-qrcode (shop-floor scanning) |
+| Backend | Node.js, Express, `mssql`, express-validator, JWT, Socket.IO, Winston, node-cron, Helmet, rate limiting, Multer (uploads), Swagger UI (API explorer) |
+| Documents | Puppeteer and PDFKit (PDF), QR codes, Nodemailer + ImapFlow + mailparser (email) |
+| AI | Google Gemini or any OpenAI-compatible gateway (OpenRouter, Cerebras), restricted to read-only tools |
 | Database | Microsoft SQL Server |
 | Testing | Jest, Supertest, Playwright |
 | Delivery | GitHub Actions, PM2, Nginx |
