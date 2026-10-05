@@ -89,6 +89,14 @@ flowchart LR
 The sales order drives MRP, which raises both the work orders and the purchase requests for the material they need. Rejected
 material at any inspection opens an NCR, goes to the MRB for disposition, and can raise a CAPA.
 
+In the app, the **document navigator** draws this chain for any real document. Below is one sales order, three links deep:
+
+![Document navigator: one sales order linked to 73 documents through 77 links](screenshots/document-flow.png)
+
+<sub>73 documents and 77 links from a single sales order: quotations, work orders, material issues, operation confirmations,
+production receipts, the delivery, the invoice and payment, inspections, NCRs and a CAPA, and the stock movements and journal
+entries each one posted.</sub>
+
 ### How cost flows into the ledger
 
 ```mermaid
