@@ -23,18 +23,18 @@ shipped, certified part and the general ledger behind it.
 
 | | |
 |---|---|
-| Backend feature modules | **103** |
-| REST endpoints | **~980** (OpenAPI spec generated from source) |
-| Reports and dashboards | **37** report pages · **8** dashboards |
-| Printable documents | **28** PDF templates (orders, invoices, certificates, travelers, labels) |
-| Background jobs | **8** scheduled jobs and alerts |
-| Database | **224 tables · 647 foreign keys · 271 CHECK constraints** (SQL Server) |
-| Schema migrations | **360+**, versioned and replayable |
-| Automated tests | **384** Jest test files · **139** Playwright end-to-end specs |
-| Pre-push verification gates | **35** |
-| Code | ~200k lines backend JS · ~110k lines frontend |
+| Backend feature modules | **107** |
+| REST endpoints | **~1,100** (OpenAPI spec generated from source) |
+| Reports and dashboards | **38** report pages, plus role dashboards |
+| Printable documents | **30** PDF templates (orders, invoices, certificates, travelers, check sheets, labels) |
+| Background jobs | **9** scheduled jobs and alerts |
+| Database | **~250 tables · 650+ foreign keys · 270+ CHECK constraints** (SQL Server) |
+| Schema migrations | **~400**, versioned and replayable |
+| Automated tests | **685** Jest test files · **164** Playwright end-to-end specs |
+| Pre-push verification gates | **43** |
+| Code | ~275k lines backend JS · ~145k lines frontend |
 
-<sub>Figures as of October 2026.</sub>
+<sub>Figures as of November 2026.</sub>
 
 ---
 
@@ -45,11 +45,12 @@ shipped, certified part and the general ledger behind it.
 | **Sales & CRM** | Inquiry pipeline → quotation → sales order → delivery → AR invoice → payment; multi-currency price lists; AS9100 order review; customer complaints and account-health dashboard; new-product introduction stage gates (tooling → wax → shell → casting → NDT → PPAP) |
 | **Procurement** | Purchase request → RFQ → PO → goods receipt → supplier invoice with 3-way match and tolerance → payment; landed cost allocation; GR/IR clearing; supplier evaluation and certification |
 | **Foundry operations** | The investment-casting process recorded stage by stage (see below), with melt heats tracked down to the poured part |
-| **Manufacturing** | BOMs, routings, work centers and machines, work orders, shop-floor confirmation, MRP, subcontracting / outside processing, maintenance (CMMS), tooling and dies |
-| **Quality** | Incoming, in-process and final inspection plans; NCR, MRB and CAPA with per-defect disposition; operator certification; calibration; quality certificates |
+| **Manufacturing** | BOMs, routings, work centers and machines, work orders, shop-floor confirmation with run readings, MRP, subcontracting / outside processing, tooling and dies |
+| **Planning & maintenance** | Shift calendars; a planner board that proposes each machine's schedule and re-plans around breakdowns; full CMMS with preventive-maintenance plans, SLAs, independent verification of repairs, and maintenance cost posted to the ledger |
+| **Quality** | Quality plans with ballooned drawings and check sheets; first-piece gate; incoming, in-process and final inspection to plan; NCR, MRB and CAPA with per-defect disposition; operator certification; calibration; quality certificates |
 | **Inventory** | Multi-warehouse and bin locations, lot and heat tracking, shelf-life expiry, stock counts, perpetual stock card |
-| **Finance** | Double-entry general ledger fed by every operational module; fiscal period close; multi-currency with FX revaluation; fixed assets; bank reconciliation; withholding tax; standard costing, WIP → COGM → COGS; Indonesian e-Faktur tax export |
-| **Platform** | Multi-company tenancy, role-based permissions, configurable approval rules, field-level audit trail, PDF document generation, document email, scheduled jobs and alerts, real-time multi-user sync, an AI assistant with read-only database tools |
+| **Finance** | Double-entry general ledger fed by every operational module; fiscal period close; multi-currency with per-currency AR/AP accounts and FX revaluation; fixed assets; bank reconciliation; withholding tax; standard costing, WIP → COGM → COGS; Indonesian Faktur Pajak with PPN and PPh 22 |
+| **Platform** | Multi-company tenancy, role-based permissions, configurable approval rules, field-level audit trail, PDF document generation, document email, scheduled jobs and alerts, real-time multi-user sync, an AI assistant with read-only database tools, a document library with semantic search, in-app role guides and tours |
 
 ### The foundry process it models
 
@@ -121,7 +122,8 @@ master's cost, and that value waits in deferred COGS until the invoice recognise
 **Sales & CRM**
 - Inquiry pipeline with follow-up tracking, quotations, and sales orders with AS9100 order review and customer requirements
 - Delivery notes with packing (packages, packing list, commercial invoice), mill certificate and certificate of conformance
-- AR invoices with PPN, down-payment invoices and advance application, credit memos, customer payments, RMA
+- AR invoices with PPN, down-payment invoices and advance application, credit memos, customer payments
+- Customer returns received line by line and settled on both the goods and the money
 - Customer activities (calls, visits, meetings), CRM dashboard, customer complaints, account-health scoring
 - New-product introduction stage gates through PPAP; multi-currency price lists and pricing rules
 
@@ -129,22 +131,37 @@ master's cost, and that value waits in deferred COGS until the invoice recognise
 - Purchase requests (manual or from MRP), RFQ, purchase orders, goods receipts with incoming inspection
 - Supplier invoices with configurable 3-way-match tolerance and variance approval; supplier payments and advances
 - Landed-cost shipments and allocation, GR/IR clearing, purchase returns, supplier debit memos
-- Supplier certifications, evaluations and scorecard; item–supplier prices and lead times
+- Supplier certifications, evaluations and scorecard; supplier status, where a blocked supplier stops new purchase orders;
+  item–supplier prices and lead times
 
 **Foundry & manufacturing**
 - Wax injection, cluster assembly, shell building (per coat), dewax, melt with heat chemistry, pour, knockout and cut-off, heat
   treatment, machining
 - Product data management (BOMs and routings), work centers, machines with runs, cycles and batches, work orders, rework orders
-- Shop-floor operation queue with QR scanning, confirmation and downtime logging; shop travelers and cluster route cards
-- MRP that generates work orders and purchase requests; capacity load
-- Subcontracting and outside processing, with approval to switch an operation to a vendor or back in-house
-- Maintenance (breakdown and preventive); tooling and dies with ownership, custody and capitalization; tool crib
+- Shop-floor operation queue with QR scanning, confirmation and downtime logging; process settings recorded before work starts
+  and readings at the plan's check points; shop travelers, cluster route cards and the foundry log register
+- MRP that generates work orders and purchase requests; capacity load on the shift calendar
+- Subcontracting and outside processing, with approval to switch an operation to a vendor or back in-house; subcontract
+  orders without a work order; a vendor's faulty rework settled by debit note
+- Tooling and dies with ownership, custody and capitalization; tool crib
 - Standard costs, mass cost rollup, overhead and indirect-consumable rates, service-department cost allocation
 - Product genealogy, and a document navigator that draws how any document connects to the rest
 
+**Planning & maintenance**
+- Shift calendars: templates, weekly patterns, holidays and exceptions, per work center
+- Planner board: an auto-schedule proposal for each machine (one die per injection press), applied and pinned as firm by the
+  planner, re-planned automatically when a machine breaks down; preventive maintenance shown on the same board
+- Corrective maintenance: anyone can request, a supervisor accepts, and the repair is verified by someone who did not do it
+- Preventive-maintenance plans with approval and revisions, task checklists, per-shift daily checks and an annual baseline
+- SLA per priority with due times and an escalation job; failure codes
+- Spare parts and outside service charged to the maintenance order and posted to the ledger
+- Reports: MTBF and MTTR, PM compliance, maintenance cost, breakdown Pareto, each machine's history
+
 **Quality**
-- Inspection plans with characteristics measured at each shop-floor stage; AQL sampling levels
-- Incoming, in-process and final inspection with multi-defect disposition; MRB; NCR; CAPA
+- Quality plans with characteristics measured at each shop-floor stage, ballooned drawings printed into the plan and its check
+  sheets, and acknowledgement by operations management; AQL sampling levels
+- A first-piece QC gate; results judged against the plan by the system, with a supervisor verifying the rest (never their own)
+- Incoming, in-process and final inspection to plan, with multi-defect disposition; MRB; NCR; CAPA
 - NDT records, calibration records and alerts, operator certifications that gate work centers
 - Quality certificates, cost of quality, scrap Pareto, supplier scorecard
 
@@ -154,24 +171,32 @@ master's cost, and that value waits in deferred COGS until the invoice recognise
 
 **Finance**
 - Chart of accounts, posting profiles routed by business group, journal approvals, posting queue, void center
-- Fiscal periods with period and year-end close, opening balances, FX revaluation, budgets, cost centers
+- Fiscal periods with period and year-end close, opening balances, budgets, cost centers
+- Multi-currency: each currency posts only to the AR and AP accounts designated for it, and an order in a currency its
+  supplier's AP account cannot hold is refused up front; FX revaluation runs that can be reversed
 - Bank accounts, bank statement import and reconciliation, petty cash, cash-flow forecast
-- Fixed assets, withholding tax, e-Faktur export, PPN reconciliation
+- Indonesian tax: PPN by the customer's tax treatment; the Faktur Pajak as its own document over one or several invoices, with
+  "bill together" for one customer; withheld PPN and PPh 22 recorded on the customer's receipt; the weekly tax exchange rate;
+  e-Faktur export and PPN reconciliation
+- Fixed assets, withholding tax
 
-**Reports (37)**
+**Reports (38)**
 - Financial: trial balance, profit and loss, balance sheet, GL activity, GL integrity, subledger reconciliation, AR and AP aging
   and outstanding, customer and supplier ledgers, PPN reconciliation, GR/IR reconciliation
-- Cost and production: COGM, COGS, cost variance, variance analysis, floor variance, WIP quantity, material issue, rework
-  movement, casting yield, revert recovery, scrap Pareto, cost of quality
+- Cost and production: COGM, COGS, cost variance, variance analysis, floor variance, outside-operation variance, WIP quantity,
+  material issue, rework movement, casting yield, revert recovery, scrap Pareto, cost of quality
 - Operations: OEE, downtime, capacity load, sales summary, outstanding orders and delivery detail, purchase summary and
   tracking, item price history, fixed-asset mutation and disposal
 
 **Platform**
 - Multiple companies, users, roles and permissions, configurable approval rules, KPI targets
-- Field-level audit trail, attachments, notifications, real-time updates across users
-- 28 printable PDF documents; document email with correspondence history; inbound mailbox polling; scheduled reports
+- Field-level audit trail, where a journal line's history leads back to its source document; attachments, notifications,
+  real-time updates across users; records past their editable stage open read-only
+- 30 printable PDF documents; document email with correspondence history; inbound mailbox polling; scheduled reports
 - A public QR verification page for printed documents
 - An AI assistant with read-only database tools, where every question and every query it runs is logged
+- An AI Library: documents uploaded, approved, split into passages and indexed for semantic search
+- In-app onboarding: role playbooks, a guide drawer on every screen, and a spotlight tour
 
 </details>
 
@@ -183,12 +208,13 @@ master's cost, and that value waits in deferred COGS until the invoice recognise
 flowchart LR
     U[Browser<br/>React SPA] -- HTTPS / REST --> N[Nginx]
     U <-- WebSocket --> N
-    N --> A[Express API<br/>103 modules]
+    N --> A[Express API<br/>107 modules]
     A --> DB[(SQL Server)]
-    A --> PDF[Puppeteer / PDFKit<br/>document rendering]
+    A --> PDF[Puppeteer / PDFKit<br/>pdf-lib<br/>document rendering]
     A --> MAIL[SMTP / IMAP<br/>document email]
     A --> JOB[node-cron<br/>scheduled jobs]
     A --> AI[LLM providers<br/>read-only tools]
+    EMB[Python indexer<br/>multilingual embeddings] --> DB
 ```
 
 - **Backend:** each feature module follows the same `routes → controller → service → validation` structure. Every route passes
@@ -205,8 +231,10 @@ flowchart LR
 ### 1. Making the books tie
 Every operational event (a goods receipt, a material issue, a production receipt, a scrap decision, a shipment) posts its own
 journal entry. The hard part was not posting but **proving the ledger agrees with the subledgers**: inventory value with the
-stock ledger, WIP with open work orders, AR and AP with open documents, in both document currency and base currency. Posted
-entries are immutable at the database level, and posting is blocked outside an open fiscal period.
+stock ledger, WIP with open work orders, AR and AP with open documents, in both document currency and base currency. Each
+currency posts only to the receivable and payable accounts designated for it, which are the accounts FX revaluation restates,
+so a foreign balance can't end up somewhere revaluation never looks. Posted entries are immutable at the database level, and
+posting is blocked outside an open fiscal period.
 
 ### 2. Multi-company tenancy without leaks
 One database serves several companies. Every company-scoped query filters by company; the active company is validated
@@ -228,14 +256,23 @@ One inspection can record several defects, each with its own disposition (accept
 MRB). Each disposition routes stock to the right warehouse and posts the right journal entry, and a part held for rework goes
 back into production through a rework work order.
 
+### 6. Scheduling against the shop's real calendar
+Every machine and work center runs on a shift calendar (weekly patterns, holidays, one-off exceptions), resolved in one place.
+The planner board proposes a schedule for each machine, for example one die per injection press, and the planner can apply it
+and pin bars as firm. When a machine breaks down, its remaining work is re-planned automatically. OEE loading, capacity and
+maintenance SLA clocks are all measured on that same calendar, and past periods are frozen, so editing a calendar never
+rewrites history.
+
 ---
 
 ## Engineering discipline
 
 A system with this many interacting rules breaks in ways ordinary tests miss, so verification became its own body of work:
 
-- **A 35-gate pre-push suite.** It checks things a linter can't, for example that every enum value a script sends is one the
+- **A 43-gate pre-push suite.** It checks things a linter can't, for example that every enum value a script sends is one the
   validator accepts, or that cost and currency figures keep their scale through a calculation.
+- **Schema parity.** Every migration is applied to both the sample and the production database, and a gate fails if their
+  schemas ever differ.
 - **SQL compiled against the live schema before it runs.** A full-lifecycle seed script builds a complete sample company,
   from master data through a closed accounting period. Every SQL statement in it is first compiled against the real schema with
   `SET NOEXEC ON`, which catches misspelled columns and reserved-word aliases before a long rebuild fails halfway through.
@@ -254,8 +291,8 @@ A system with this many interacting rules breaks in ways ordinary tests miss, so
 |---|---|
 | Frontend | React 18, Vite, React Router, TanStack React Query, React Hook Form, Zod, Tailwind CSS, Recharts / ApexCharts, React Flow (document graph), html5-qrcode (shop-floor scanning) |
 | Backend | Node.js, Express, `mssql`, express-validator, JWT, Socket.IO, Winston, node-cron, Helmet, rate limiting, Multer (uploads), Swagger UI (API explorer) |
-| Documents | Puppeteer and PDFKit (PDF), QR codes, Nodemailer + ImapFlow + mailparser (email) |
-| AI | Google Gemini or any OpenAI-compatible gateway (OpenRouter, Cerebras), restricted to read-only tools |
+| Documents | Puppeteer and PDFKit (PDF), pdf-lib (merging drawings into plans), QR codes, Nodemailer + ImapFlow + mailparser (email) |
+| AI | Google Gemini or any OpenAI-compatible gateway (OpenRouter, Cerebras), restricted to read-only tools; Python with sentence-transformers (multilingual E5) for semantic search |
 | Database | Microsoft SQL Server |
 | Testing | Jest, Supertest, Playwright |
 | Delivery | GitHub Actions, PM2, Nginx |
@@ -266,7 +303,8 @@ A system with this many interacting rules breaks in ways ordinary tests miss, so
 
 I designed and built InvCast ERP, working closely with the foundry's own processes and accounting rules. Development was
 AI-assisted: I used coding agents for much of the implementation, and I owned the domain model, the architecture, the
-business rules and the verification system above, which exists so that nothing ships on an agent's say-so.
+business rules and the verification system above, which exists so that nothing ships on an agent's say-so. The AI Library
+module was contributed by a team member.
 
 ---
 
